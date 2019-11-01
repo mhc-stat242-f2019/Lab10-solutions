@@ -1,0 +1,130 @@
+---
+title: "Lab 10: Quadratic Regression"
+output:
+  pdf_document:
+    fig_height: 2.8
+    fig_width: 6
+  html_document:
+    fig_height: 3
+    fig_width: 5
+  word_document:
+    fig_height: 3
+    fig_width: 5
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{vwcol}
+geometry: margin=0.5in
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache = FALSE)
+library(ggplot2)
+library(readr)
+library(dplyr)
+library(gridExtra)
+options(width = 100)
+```
+
+## Electricity Demand
+
+We have data from the Australian Energy Market Operator and the Australian Bureau of Meteorology with daily electricity demand for Victoria, Australia, in 2014.  For each day, we have:
+
+ * `Demand`: Total electricity demand in GW for Victoria, Australia
+ * `WorkDay`: "WorkDay" for work days, and "Other" for non work days
+ * `Temperature`: The daily high temeprature in degrees Celsius
+
+```{r, echo = FALSE, message = FALSE}
+elecdaily <- read_csv("http://www.evanlray.com/data/fpp2/elecdaily.csv")
+head(elecdaily)
+elecdaily_jan <- elecdaily[1:31, ]
+```
+
+As always with data collected over time, we should be suspicious of the condition of independence.  For today, let's set that aside and focus on an analysis of the relationships between these variables.
+
+The `elecdaily_jan` data frame contains the data for just January, and the `elecdaily` data frame contains the data for the full year.
+
+#### 1. Make a plot of the data for January (`elecdaily_jan`), treating Demand as the response and Temperature as the explanatory variable.
+
+```{r}
+ggplot(data = elecdaily_jan, mapping = aes(x = Temperature, y = Demand)) +
+  geom_point()
+```
+
+#### 2. Fit a linear regression model using Temperature as an explanatory variable and Demand as the response.  Print a summary of your model fit.
+
+```{r}
+lm_fit <- lm(Demand ~ Temperature, data = elecdaily_jan)
+summary(lm_fit)
+```
+
+#### 3. Write down the equation for the estimated mean electricity demand as a function of temperature.
+
+$\hat{mu} = 59.33 + 6.16 Temperature$
+
+#### 4. Find the predicted electricity demand from your model if the Temerature is 10 degrees C.  Do you trust your prediction?
+
+```{r}
+59.33 + 6.16 * 10
+
+predict(lm_fit, newdata = data.frame(Temperature = 10))
+```
+
+We should not trust this prediction because the `elecdaily_jan` data set has only observations with temperatures between about 20 degrees and 43 degrees.  It's not reliable to extrapolate a linear relationship beyond the observed range of the data.
+
+#### 5. Create a plot of the data for the full year, in the `elecdaily` data frame.  How did your prediction from part 4 do?
+
+```{r}
+ggplot(data = elecdaily, mapping = aes(x = Temperature, y = Demand)) +
+  geom_point()
+```
+
+Not very well!  There was actually a quadratic relationship between temperature and demand, and that was not captured in the model from part 2 that we used to get the prediction.
+
+#### 6. Fit a quadratic regression model to the data for the full year and print out the model summary.
+
+```{r}
+quad_fit <- lm(Demand ~ poly(Temperature, degree = 2, raw = TRUE), data = elecdaily)
+summary(quad_fit)
+```
+
+#### 7. Write down the equation for the estimated mean electricity demand as a function of temperature.
+
+$\hat{\mu} = 387.70 - 15.28 Temperature + 0.32 Temperature^2$
+
+#### 8. Find the predicted electricity demand from your model if the Temperature is 10 degrees C.
+
+```{r}
+387.70 - 15.28 * 10 + 0.32 * 10^2
+
+predict(quad_fit, newdata = data.frame(Temperature = 10))
+```
+
+#### 9. Make some residual diagnostic plots from your quadratic regression model.  Do you see any evidence of problems?
+
+```{r}
+elecdaily <- elecdaily %>%
+  mutate(
+    resid_quad = residuals(quad_fit)
+  )
+
+ggplot(data = elecdaily, mapping = aes(x = Temperature, y = resid_quad)) +
+  geom_point()
+
+ggplot(data = elecdaily, mapping = aes(x = resid_quad)) +
+  geom_density()
+```
+
+The residual density plot is bimodal.  This suggests we should investigate further as there may be two groups in our data set.
+
+#### 10. Make another plot of the data, this time coloring each day according to whether it is a work day or not.  What's going on?
+
+```{r}
+ggplot(data = elecdaily, mapping = aes(x = Temperature, y = Demand, color = WorkDay)) +
+  geom_point()
+
+
+ggplot(data = elecdaily, mapping = aes(x = resid_quad, color = WorkDay)) +
+  geom_density()
+```
+
+The electricity demand on work days is consistently higher than the electricity demand on non work days that have the same temperature.
